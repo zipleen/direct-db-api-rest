@@ -2,7 +2,7 @@ Simple Automagic REST Direct DB layer in PHP
 ---------------------------------------------
 
 So I was trying to play with REST interfaces, and came across Restler ( https://github.com/Luracast/Restler )
-and wanted to try and see if this made some fast implementation on data manipulation.
+and wanted to try and see if I could build something fast that could manipulate sql data.
 After playing with it for 30 minutes, I started making an abstract class that started to implement a CRUD interface
 that would interface with a ExtJS RESTfull storage and grid panels. In about 4 hours it was almost all up and running.
 
@@ -48,4 +48,4 @@ License
 -------
 
 This is licensed in a BSD style license, use it in whatever you want. If you want to give credit that it was based on this
-example, got ahead.
+example, go ahead.
