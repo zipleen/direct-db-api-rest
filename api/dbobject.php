@@ -11,12 +11,31 @@ abstract class DbObject
 	private $fields = array();
 	private $pkey;
 
+	/**
+	 *
+	 * relation tables and relation fields specifies fields that need to be added to the sql query
+	 * so they appear to the get response. for example, you want to show the department name that matches the 
+	 * department_id from a table, and the name is in another table. You can then use:
+	 *  // this associates id_user key from my table to the id of users table. Also associates id_departamento key
+	 *  //  FK to the id PK from departamentos table
+	 *  $this->relations_tables = array('id_user'=>array('users'=>'id'),
+	 *									'id_department'=>array('department'=>'id'));
+	 *  // I then want to see a users.name and a department name
+	 *	$this->relations_fields = array('users.name'=>'nome_user', 'department.nome'=>'nome_dep');
+	 */
 	protected $relations_tables = null;
 	protected $relations_fields = null;
 	
+	// this is the char that will be uses to concatenate fields
 	protected $joinpkeys_str = "-";
 	protected $root_data = "records";
 	
+	/*
+	 * you may want to add 2 fields in 1 column - this is usefull in ext because making multiple PK in a ext grid was 
+	 * becoming a problem that I wanted to solve quickly. This only works for ONE field, and it's used like
+	 *  $this->additional_get_fields_name = "md_ax";
+	 *	$this->additional_get_fields = array('cod_klm','code');
+	 */
 	protected $additional_get_fields = null;
 	protected $additional_get_fields_name = "";
 
@@ -38,10 +57,10 @@ abstract class DbObject
 		
 		$this->table_name = $table_name;
 		
-		// inicializar os campos
+		// initialize fields
 		$this->fields = $this->getTableFields();
 
-		// inicializar a pk
+		// initialize PK
 		$pk = $this->getPK();
 		if(count($pk)==1)
 		{
@@ -62,18 +81,25 @@ abstract class DbObject
 		return $this->root_data;
 	}
 	
+	/**
+	 * get primary keys, this comes from adodb! usefull =)
+	 */
 	public function getPK()
 	{
 		return $this->db->MetaPrimaryKeys($this->table_name);
 	}
-
+	
+	/**
+	 * also from adodb, get table fields in a structured way. this has a lot of usefull information
+	 * like pkeys, default values, field type 
+	 */
 	public function getTableFields()
 	{
 		return $this->db->MetaColumns($this->table_name, true);
 	}
 
 	/**
-	 * resposta em "tipo json" - so usado no get
+	 * json answer, only used in get!
 	 * 
 	 * @param unknown_type $success
 	 * @param unknown_type $msg
@@ -87,7 +113,8 @@ abstract class DbObject
 	}
 	
 	/**
-	 * dado um tipo de campo, retorna se fica LIKE ou = , para usar no WHERE
+	 * given a field type, return if it's a string match or a number match, to be used in WHERE condition 
+	 * 
 	 * 
 	 * @param unknown_type $field
 	 * @param unknown_type $val
@@ -109,6 +136,10 @@ abstract class DbObject
 		}
 	}
 
+	/**
+	 * unfortunaly, the concat values are myself specific! but it's possible to modify this to be able to use this in 
+	 * postgresql as well as other db types!
+	 */
 	private function _getConcatValues($field_as, $columns)
 	{
 		if(is_array($columns))
@@ -126,6 +157,9 @@ abstract class DbObject
 		}
 	}
 	
+	/**
+	 * again, only for mysql. i could have made a generic function on how to concatenate values based on db type =)
+	 */
 	private function _generatePKvalueFromMulti()
 	{
 		if(is_array($this->pkey))
@@ -202,8 +236,8 @@ abstract class DbObject
 				//$this->debug->logArray("sort", $sorting);
 				foreach($sorting as $s)
 				{
-					// podemos ter mais que um filtro!!!
-					// verificar se o campo existe mesmo
+					// we can have more than one filter!!!
+					// verify if the field really exists
 					if(isSet($this->fields[strtoupper($s->property)]) || isSet($inverted_rels[$s->property]))
 					{
 						$order_sql .= ",". $s->property;
@@ -225,7 +259,7 @@ abstract class DbObject
 			}
 			else
 			{
-				// verificar se a property eh um campo valido
+				// verify if the property really exists
 				if(isSet($this->fields[strtoupper($sort)]))
 				{
 					$order_sql = " ORDER BY ".$this->table_name . "." . $this->fields[strtoupper($sort)]->name;
@@ -268,7 +302,7 @@ abstract class DbObject
 			$this->debug->log(__METHOD__."() Order sql: ".$order_sql);
 		}
 		
-		// fazer o filtro!
+		// make the filter!
 		$filter_sql = "";
 		if(!is_null($filter))
 		{
@@ -278,11 +312,10 @@ abstract class DbObject
 				$this->debug->logArray(__METHOD__."($this->table_name) FILTER fields", $filter);
 				foreach($filter as $f)
 				{
-					// podemos ter mais que um filtro!!!
-					// verificar se o campo existe mesmo
+					// we can have more than one filter, verify if it really exists
 					if(isSet($this->fields[strtoupper($f->field)]))
 					{
-						// multiplos valores
+						// multiple values
 						if(is_array($f->value))
 						{
 							foreach($f->value as $val)
@@ -293,7 +326,7 @@ abstract class DbObject
 						}
 						else
 						{
-							// um valor
+							// for 1 value only
 							$filter_sql = " AND ".$this->_sqlcompare($this->fields[strtoupper($f->field)]->name, $f->value, $f->type);
 							
 						}
@@ -303,16 +336,16 @@ abstract class DbObject
 			
 		}
 		
-		// controla os relation fields - objectos que necessitem de dados de outros objectos
-		// isto esta aqui para superar um problema no renderer do grid, que por causa da concorrencia nao mostra bem os valores "related"
-		// isto nunca deveria estar aqui ja agora!
+		// this contrls the relation fields - objects that need data from another data table
+		// this exists to overcome a problem on concurrency, related to ext js not showing up the related values in a correct way
+		// this should never be here btw (i don't remember why lol)
 		$table = $this->table_name;
 		$where = "";
 		$select_fields = "";
-		// se houver uma ligacoes no sql...
+		// if there's a relation fields, we need to build it
 		if(!is_null($this->relations_fields) && !is_null($this->relations_tables))
 		{
-			// vamos ter de fazer uns inner joins..
+			// let's do some inner joins...
 			foreach($this->relations_tables as $field_this_table=>$rel_data)
 			{
 				// $this->relations_tables['id_produto'] = array('produtos'=>'id'); 
@@ -320,7 +353,7 @@ abstract class DbObject
 				$table = " $table INNER JOIN $table_rel ON $table_rel.$rel_field_pk=$this->table_name.$field_this_table ";
 			}
 			
-			// os fields
+			// the fields
 			foreach($this->relations_fields as $f=>$a)
 			{
 				$select_fields .= ",$f AS $a";
@@ -330,9 +363,9 @@ abstract class DbObject
 		
 		if( !is_null($id) )
 		{
-			// o id pode ser mais que uma pkey!
+			// id can be a multiple PK value! we need to "decode it"
 			$iid = $this->_getPKvaluesFromMulti($id);
-			// da 1 numero - 1 registo tem apenas 1 registo sempre
+			// only 1 number, 1 record can only have 1 record always
 			return $this->db->GetAllLimit("SELECT ".$this->_generatePKvalueFromMulti().$this->table_name.".* FROM ".$this->table_name." WHERE $iid", $limit, $start);
 		}
 		elseif(is_array($request_data))
@@ -358,7 +391,9 @@ abstract class DbObject
 		else
 			$data = $this->db->GetAll("SELECT ".$this->_generatePKvalueFromMulti().$add_fields.$this->table_name.".*$select_fields FROM ".$table.$order_sql);
 		
-		// se houver limites, temos de fazer paginacao! - isto eh so para varios registos
+		// if there's limits we need to do paging
+		// i think i removed this because the answers were not being consistent, if only 1 record the array was given
+		// and if more than 1 record, a message was given - this was not good, so i removed it
 		//if(is_null($limit) && is_null($start))
 		//	return $data;
 		//else
@@ -385,10 +420,10 @@ abstract class DbObject
 		else
 			throw new RestException(410, "need id to update a record");
 		
-		// validar dados
+		// validate dados
 		$data = $this->_validate($request_data);
 
-		// validar PK
+		// validate PK
 		$pk = $this->_validatePK($iid);
 		$sql_pk = $this->_joinAnd($pk);
 
@@ -409,9 +444,9 @@ abstract class DbObject
 			$request_data = array_merge($iid, $request_data);
 		}
 		
-		// valida os tipos de campos
+		// validate field types!
 		$data = $this->_validate($request_data);
-		// valida se o insert nao vai falhar por algum erro parvo de falta de campos
+		// validates if insert is possible ! - maybe because a field doesn't exist or it's an incorrect type
 		$this->_validateInsert($data);
 		
 		$this->debug->logArray(__METHOD__."($this->table_name) inserting data", $data);
@@ -423,7 +458,8 @@ abstract class DbObject
 			$pk = array( $this->pkey => $this->db->Insert_ID($this->table_name) );
 		else 
 		{
-			// se o pkey eh uma array, significa que isto nunca tera insert_id, tem de ser um conjunto de ids...
+			// if the pkey is an array, it means that it will never have an insert_id, but it will be a concatenation of ids.
+			// we need to get this =)
 			$pk = $this->_validatePK($data);
 		}
 		
@@ -458,8 +494,8 @@ abstract class DbObject
 	}
 
 	/**
-	 * junta campos=valor para ser adicionado ao WHERE do sql
-	 * requer dados no tipo array('campo'=>'valor')
+	 * joins fields=value to be added on WHERE sql clause.
+	 * needs data like array('campo'=>'valor')
 	 * 
 	 * @param array $array
 	 * @return string
@@ -479,7 +515,7 @@ abstract class DbObject
 	}
 
 	/**
-	 * verifica se os campos recebidos no vetor sao validos para insercao, retirando null's de primary keys
+	 * verify if received fields are valid for insertion, removes nulls from primary keys
 	 * 
 	 * @param array $data_recv
 	 * @throws RestException
@@ -502,7 +538,8 @@ abstract class DbObject
 				}
 			}
 			
-			// se o valor recebido existe, EH NULO mas eh uma primary key que contem um auto increment, entao vamos fazer unset pq o mysql nao gosta de receber esse nulo...
+			// if the value received is NULL, but it's a primary key with an auto increment, then we'll unset this
+			// so we can get an autoincremented value - guess mysql does not like received NULL for inserted autoincrement data
 			if(isSet($data_recv[$data->name]) && is_null($data_recv[$data->name]) && $data->not_null==true && $data->auto_increment==true && $data->primary_key==true)
 				unset($data_recv[$data->name]);
 		}
@@ -510,8 +547,8 @@ abstract class DbObject
 	}
 
 	/**
-	 * retorna um array com as primary keys ja verificadas - verifica por falta de alguma primary key!
-	 * 
+	 * returns an array with primary keys, already verified (this validates pkeys)
+	 *
 	 * @param unknown_type $data_recv
 	 * @throws RestException
 	 */
@@ -533,7 +570,7 @@ abstract class DbObject
 	}
 
 	/**
-	 * valida todos os campos do array, em conformidade com a tabela actual, pelo tipo de campo
+	 * validates all fields in the table
 	 * 
 	 * @param array $data_recv
 	 * @throws RestException
@@ -545,38 +582,38 @@ abstract class DbObject
 		foreach ($data_recv as $field=>$val)
 		{
 			$field_upper = strtoupper($field);
-			// validation a partir do tipo de field!
+			// validation from field type
 			if( isSet($this->fields[$field_upper]) )
 			{
-				// fix para quando ha coisas null, se houver coisas null vamos eh ignorar o campo!
+				// fix for when things are null, if it's null let's just skip it
 				if(is_null($val))
 					continue;
 				
-				// campo existe! vamos fazer uma verificacao para o tipo de campo!
+				// there's a field, lets examin it!
 				switch($this->fields[$field_upper]->type)
 				{
 					case "bigint":
 					case "int":
 					case "decimal":
-						// se recebemos nada e isto pode ser null, vamos ignorar o valor
+						// if we received nothing and this can be null, let it be
 						if($val==="" && $this->fields[$field_upper]->not_null==false)
 							continue;
 
-						// numero, verificar se eh um numero
+						// number, verify if it's a number
 						if(!is_numeric($val))
 							throw new RestException(417, "$field hasn't got a numeric value");
 
-						// numero ta ok! vamos ver tamanho!
+						// lets check size
 						if(strlen($val)>$this->fields[$field_upper]->max_length)
 							throw new RestException(417, "$field is a numeric value, but is to big for ".$this->fields[$field_upper]->max_length);
 
-						// adicionar ao vector
+						// add it!
 						$data_send[ $this->fields[$field_upper]->name ] = $val;
 						break;
 						
 					case "tinyint":
 					case "bit":
-						// os tinyint vamos usar para boolean types
+						// tinyints i use them for boolean types
 						if($val=="1" || $val===true)
 						{
 							$data_send[ $this->fields[$field_upper]->name ] = 1;
@@ -591,7 +628,7 @@ abstract class DbObject
 						if(strlen($val)>$this->fields[$field_upper]->max_length)
 							throw new RestException(417, "$field is a string value, but is to big for ".$this->fields[$field_upper]->max_length);
 
-						// adicionar ao vector
+						// add it!
 						$data_send[ $this->fields[$field_upper]->name ] = $val;
 						break;
 
@@ -604,7 +641,7 @@ abstract class DbObject
 					break;
 				}
 
-			}// else nao ha campo, vamos ignorar!
+			}// else no field, lets ignore it
 		}
 
 		return $data_send;
