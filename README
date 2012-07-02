@@ -1,0 +1,51 @@
+Simple Automagic REST Direct DB layer in PHP
+---------------------------------------------
+
+So I was trying to play with REST interfaces, and came across Restler ( https://github.com/Luracast/Restler )
+and wanted to try and see if this made some fast implementation on data manipulation.
+After playing with it for 30 minutes, I started making an abstract class that started to implement a CRUD interface
+that would interface with a ExtJS RESTfull storage and grid panels. In about 4 hours it was almost all up and running.
+
+Why
+---
+
+I decided to share this "object" because it really makes for an easy way to edit data stored in a relational database!
+Be remidend that this is NOT THE WAY to DO THINGS, this accesses to the database tables and this shouldn't ever occur!
+You need to have a business layer that you define what needs to get in and spit out, and then do whatever you want in the
+database (remember the 3 tier model, at least). However, for this project, direct access to the database was ok because it simplified making the admin interface and this was going to be used only be 2 people, who know how this works.
+
+This serves as an example on how to do basic RESTler stuff as well. Do note that this does not have any kind of 
+authentication scheme, so it relies on, for example, HTTP auth. This could be added easely (in index.php), but I wasn't interested in that.
+
+How to use
+----------
+
+First you need ADODb ( from adodb.sourceforge.net ) and put it in includes/adodb.
+Second, you could get the latest version of restler and put it in includes/restler.
+After this, you need to configure cnf.php and input the database details in there. 
+
+In the api/ database lies all the things you want to play with. 
+index.php - includes adodb, restler and all the classes that need to be used. 
+This uses FirePHP to debug the php code, be sure to install it in Firefox and then activate debug=yes in cnf.php.
+The includes/ directory has a class that I use for myself to help me interact with ADODb. It's just a layer on top of adodb.
+Also, the debug class is a layer on top of FirePHP or whatever other debug facility you want to use.
+
+To edit a "table", just create a file with the table name and create a class with that name and extends dbobject! That's it!
+get, put, post, delete are created, and "get" has all the things that extjs panel wants for editing, listing, etc.
+All the stuff is automatic, it tries to get keys, multiple keys, but it does not have automatic FK detection - that's up
+to the programmer - performance issues :p
+
+It has additional features as well, if you check products.php you find "relation tables" and "relation fields" to add more
+info to the "get" command - for example, I wanted to display the name of the product type that was in other table (tipo_product)
+this can be added in that array variable, and dboject will do the rest for you.
+
+the file user_dep_view.php implements other things, like getTree() which builds a json response to build a tree in extJS.
+In turn, this file uses the "get" functions to retrieve info and not do any more "db stuff".
+This user_dep_view.php in fact is a "View" and not a table, so you can a mix of tables and answers from the db. However, insert, update and delete don't work on a view =)
+
+
+License
+-------
+
+This is licensed in a BSD style license, use it in whatever you want. If you want to give credit that it was based on this
+example, got ahead.
